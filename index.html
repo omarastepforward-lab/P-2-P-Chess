@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Alezify · DeepSeek vs ChatGPT 5.5 · Chess Analysis</title>
+<title>Alezify · DeepSeek vs ChatGPT 5.5</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -12,13 +12,435 @@
 <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.js"></script>
 <style>
-/* … (paste the full CSS from the previous answer – I’ll include it) … */
+:root{
+  --bg:#0a0d12;--surface:#10151d;--surface-2:#151b25;--surface-3:#1b2330;
+  --border:#242f3e;--border-hi:#334255;
+  --text:#e6ecf5;--text-2:#8b99ad;--text-3:#5a6a80;
+  --gold:#d4a843;--gold-hi:#f0c75e;--gold-glow:rgba(212,168,67,.22);
+  --green:#3ddc84;--red:#e74c5e;
+  --radius:14px;--radius-sm:9px;
+  --tr:180ms cubic-bezier(.4,0,.2,1);
+  --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono','SF Mono',Menlo,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:16px;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body{
+  font-family:var(--font);background:var(--bg);color:var(--text);
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;
+  padding:28px 20px 32px;
+  background-image:
+    radial-gradient(ellipse 70% 45% at 50% -15%,rgba(212,168,67,.07),transparent 60%),
+    radial-gradient(ellipse 55% 40% at 85% 105%,rgba(74,158,255,.05),transparent 60%);
+  background-attachment:fixed;
+}
+
+/* Header */
+.header{width:100%;max-width:560px;display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;gap:16px;flex-wrap:wrap}
+.brand{display:flex;flex-direction:column;gap:3px}
+.brand h1{font-size:1.55rem;font-weight:800;letter-spacing:-.035em;line-height:1;
+  background:linear-gradient(135deg,#fff 0%,#f0c75e 60%,#d4a843 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.brand .tag{font-size:.66rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--text-3)}
+
+/* Board card */
+.board-card{width:100%;max-width:560px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);overflow:hidden;box-shadow:0 22px 60px rgba(0,0,0,.55)}
+
+.board-card-top{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;
+  background:var(--surface-2);border-bottom:1px solid var(--border);gap:10px;flex-wrap:wrap}
+.turn-row{display:flex;align-items:center;gap:9px;font-size:.76rem;font-weight:600;color:var(--text-2)}
+.turn-row .tdot{width:10px;height:10px;border-radius:50%;background:#eee;border:2px solid var(--gold);box-shadow:0 0 10px var(--gold-glow)}
+.turn-row.black-turn .tdot{background:#1a1a1a;border-color:var(--border-hi);box-shadow:none}
+.controls{display:flex;gap:6px}
+.ctl-btn{display:inline-flex;align-items:center;justify-content:center;padding:7px 12px;border-radius:8px;border:1px solid var(--border);
+  background:var(--surface-3);color:var(--text-2);font-family:var(--font);font-size:.71rem;font-weight:600;letter-spacing:.02em;
+  cursor:pointer;transition:all var(--tr);white-space:nowrap}
+.ctl-btn:hover{background:var(--border);color:var(--text);border-color:var(--border-hi)}
+.ctl-btn:active{transform:scale(.96)}
+.ctl-btn.gold{background:linear-gradient(135deg,var(--gold),#b8922e);color:#1a1400;border-color:transparent;box-shadow:0 2px 14px var(--gold-glow)}
+.ctl-btn.gold:hover{filter:brightness(1.08);box-shadow:0 4px 22px rgba(212,168,67,.4)}
+
+/* Player chips */
+.player-bar{display:flex;align-items:center;padding:10px 16px;gap:12px}
+.player-bar.top{border-bottom:1px solid var(--border)}
+.player-bar.bottom{border-top:1px solid var(--border)}
+.player-chip{display:flex;align-items:center;gap:10px;padding:6px 14px 6px 7px;border-radius:100px;
+  background:var(--surface-2);border:1px solid var(--border);transition:all var(--tr)}
+.player-chip.active{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold-glow);background:var(--surface-3)}
+.p-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:.78rem;font-weight:800;flex-shrink:0}
+.p-avatar.w{background:linear-gradient(135deg,#f5e0a0,#d4a843);color:#1a1400}
+.p-avatar.b{background:linear-gradient(135deg,#4a5568,#232c38);color:#e6ecf5;border:1px solid var(--border-hi)}
+.p-meta{display:flex;flex-direction:column;line-height:1.2}
+.p-name{font-size:.82rem;font-weight:700;color:var(--text)}
+.p-rating{font-size:.66rem;font-weight:500;color:var(--text-3);letter-spacing:.02em}
+
+/* Board */
+.board-wrap{padding:16px;background:var(--surface);display:flex;justify-content:center}
+#board{width:100%;max-width:520px;border-radius:10px;overflow:hidden;box-shadow:0 6px 26px rgba(0,0,0,.45);position:relative}
+#board .white-1e1d7{background-color:#ebecd0 !important}
+#board .black-1e1d7{background-color:#779556 !important}
+
+/* Interaction highlights */
+#board .square-55d63{position:relative}
+#board .square-55d63.last-move{background-color:rgba(255,215,80,.42) !important}
+#board .square-55d63.selected-square{background-color:rgba(255,235,100,.68) !important;
+  box-shadow:inset 0 0 0 3px rgba(255,200,0,.95) !important}
+#board .legal-move::after{content:'';position:absolute;top:50%;left:50%;width:30%;height:30%;
+  transform:translate(-50%,-50%);background:rgba(20,20,20,.32);border-radius:50%;pointer-events:none;z-index:10}
+#board .legal-capture::after{content:'';position:absolute;top:2%;left:2%;width:96%;height:96%;
+  border-radius:50%;border:4px solid rgba(230,60,60,.72);box-sizing:border-box;pointer-events:none;z-index:10}
+#board .legal-move:hover::after{background:rgba(20,20,20,.5)}
+#board .legal-capture:hover::after{border-color:rgba(230,60,60,.95)}
+
+/* Move input */
+.move-input-bar{padding:13px 16px;border-top:1px solid var(--border);background:var(--surface-2);display:flex;gap:8px;align-items:center}
+.move-input-bar label{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);white-space:nowrap}
+#moveInput{flex:1;padding:9px 13px;border-radius:8px;background:var(--bg);border:1px solid var(--border);
+  color:var(--text);font-family:var(--mono);font-size:.85rem;font-weight:500;outline:none;transition:all var(--tr)}
+#moveInput:focus{border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-glow)}
+#moveInput::placeholder{color:var(--text-3);font-family:var(--font);font-weight:400}
+
+/* PGN panel */
+.pgn-card{width:100%;max-width:560px;margin-top:20px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);overflow:hidden;box-shadow:0 8px 28px rgba(0,0,0,.35)}
+.panel-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;
+  background:var(--surface-2);border-bottom:1px solid var(--border)}
+.panel-head h2{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-2)}
+.panel-head .hint{font-size:.62rem;font-weight:500;color:var(--text-3);letter-spacing:.03em}
+.panel-body{padding:15px 16px}
+#pgnArea{width:100%;min-height:110px;padding:11px 13px;font-family:var(--mono);font-size:.75rem;line-height:1.55;
+  color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);
+  outline:none;resize:vertical;transition:border-color var(--tr)}
+#pgnArea:focus{border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-glow)}
+.pgn-actions{display:flex;gap:8px;margin-top:10px}
+.pgn-actions .ctl-btn{flex:1;padding:9px 10px;font-size:.72rem}
+
+/* Footer */
+.footer{margin-top:28px;font-size:.7rem;font-weight:500;color:var(--text-3);letter-spacing:.05em;text-align:center}
+.footer b{color:var(--text-2);font-weight:600}
+
+/* Toast */
+.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(120%);
+  padding:11px 20px;border-radius:10px;background:var(--surface-3);border:1px solid var(--border-hi);
+  color:var(--text);font-size:.8rem;font-weight:600;box-shadow:0 12px 36px rgba(0,0,0,.55);
+  opacity:0;transition:all 300ms cubic-bezier(.4,0,.2,1);z-index:1000;pointer-events:none}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.toast.err{border-color:var(--red);color:#ffb8c0}
+.toast.ok{border-color:var(--green);color:#b8f5d4}
 </style>
 </head>
 <body>
-<!-- … HTML markup … -->
+
+<header class="header">
+  <div class="brand">
+    <h1>Alezify · Chess Board</h1>
+    <span class="tag">DeepSeek vs ChatGPT 5.5</span>
+  </div>
+</header>
+
+<main class="board-card">
+  <div class="board-card-top">
+    <div class="turn-row" id="turnRow">
+      <span class="tdot"></span>
+      <span id="turnText">White to move</span>
+    </div>
+    <div class="controls">
+      <button class="ctl-btn" id="undoBtn">↶ Undo</button>
+      <button class="ctl-btn" id="flipBtn">⇅ Flip</button>
+      <button class="ctl-btn gold" id="newBtn">＋ New Game</button>
+    </div>
+  </div>
+
+  <!-- Top: ChatGPT 5.5 (Black) -->
+  <div class="player-bar top">
+    <div class="player-chip" id="chipBlack">
+      <div class="p-avatar b">GPT</div>
+      <div class="p-meta">
+        <span class="p-name">ChatGPT 5.5</span>
+        <span class="p-rating">2740 · Black</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="board-wrap"><div id="board"></div></div>
+
+  <!-- Bottom: DeepSeek (White) -->
+  <div class="player-bar bottom">
+    <div class="player-chip active" id="chipWhite">
+      <div class="p-avatar w">DS</div>
+      <div class="p-meta">
+        <span class="p-name">DeepSeek</span>
+        <span class="p-rating">2765 · White</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="move-input-bar">
+    <label for="moveInput">Move</label>
+    <input type="text" id="moveInput" placeholder="Type SAN (e4, Nf3, O-O, exd5) and press Enter…" autocomplete="off" spellcheck="false">
+  </div>
+</main>
+
+<section class="pgn-card">
+  <div class="panel-head">
+    <h2>PGN · Copy & Paste</h2>
+    <span class="hint">share with the AI</span>
+  </div>
+  <div class="panel-body">
+    <textarea id="pgnArea" placeholder="1. e4 e5 2. Nf3 Nc6 …"></textarea>
+    <div class="pgn-actions">
+      <button class="ctl-btn gold" id="copyBtn">Copy PGN</button>
+      <button class="ctl-btn" id="loadBtn">Load PGN</button>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  Alezify · By <b>Omar Sanad</b> · © 2026
+</footer>
+
+<div class="toast" id="toast"></div>
+
 <script>
-/* … Full JavaScript with ENGINE_SOURCES pointing to ./stockfish/stockfish-19-lite-single.js … */
+/* ═══════════ STATE ═══════════ */
+const game = new Chess();
+let board = null;
+let selectedSquare = null;
+let lastMove = {from: null, to: null};
+
+/* ═══════════ BOARD ═══════════ */
+function initBoard(){
+  board = Chessboard('board', {
+    draggable: true,
+    position: 'start',
+    pieceTheme: 'https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/img/chesspieces/wikipedia/{piece}.png',
+    onDragStart: onDragStart,
+    onDrop: onDrop,
+    onSnapEnd: onSnapEnd,
+    onSquareClick: onSquareClick
+  });
+  window.addEventListener('resize', () => board.resize());
+}
+
+function onDragStart(source, piece){
+  if (game.game_over()) return false;
+  if (game.turn() === 'w' && piece[0] === 'b') return false;
+  if (game.turn() === 'b' && piece[0] === 'w') return false;
+  selectedSquare = source;
+  refreshHighlights();
+  return true;
+}
+
+function onDrop(source, target){
+  if (!target){ selectedSquare = null; refreshHighlights(); return 'snapback'; }
+  const move = game.move({from: source, to: target, promotion: 'q'});
+  if (!move){ selectedSquare = null; refreshHighlights(); return 'snapback'; }
+  lastMove = {from: move.from, to: move.to};
+  selectedSquare = null;
+  board.position(game.fen());
+  refreshHighlights();
+  updateTurnUI();
+  updatePgn();
+  if (game.game_over()) showToast(gameOverMessage(), 'ok');
+}
+
+function onSnapEnd(){ board.position(game.fen()); }
+
+function onSquareClick(square, piece){
+  if (game.game_over()) return;
+
+  // 1) Try to move onto clicked square if it's a legal destination
+  if (selectedSquare){
+    const moves = game.moves({square: selectedSquare, verbose: true});
+    const legal = moves.find(m => m.to === square);
+    if (legal){
+      const move = game.move({from: selectedSquare, to: square, promotion: 'q'});
+      if (move){
+        lastMove = {from: move.from, to: move.to};
+        selectedSquare = null;
+        board.position(game.fen());
+        refreshHighlights();
+        updateTurnUI();
+        updatePgn();
+        if (game.game_over()) showToast(gameOverMessage(), 'ok');
+        return;
+      }
+    }
+  }
+
+  // 2) Select own piece / deselect if same square
+  if (piece && piece[0] === game.turn()){
+    selectedSquare = (selectedSquare === square) ? null : square;
+    refreshHighlights();
+    return;
+  }
+
+  // 3) Click empty / illegal → clear selection
+  if (selectedSquare){
+    selectedSquare = null;
+    refreshHighlights();
+  }
+}
+
+function refreshHighlights(){
+  $('#board .square-55d63').removeClass('selected-square legal-move legal-capture last-move');
+
+  if (lastMove.from && lastMove.to){
+    $('#board .square-' + lastMove.from).addClass('last-move');
+    $('#board .square-' + lastMove.to).addClass('last-move');
+  }
+
+  if (selectedSquare){
+    $('#board .square-' + selectedSquare).addClass('selected-square');
+    for (const m of game.moves({square: selectedSquare, verbose: true})){
+      const cls = (m.captured || m.flags.indexOf('e') >= 0) ? 'legal-capture' : 'legal-move';
+      $('#board .square-' + m.to).addClass(cls);
+    }
+  }
+}
+
+/* ═══════════ UI ═══════════ */
+function updateTurnUI(){
+  const isWhite = game.turn() === 'w';
+  document.getElementById('turnText').textContent = game.game_over()
+    ? 'Game over'
+    : (isWhite ? 'White to move' : 'Black to move');
+  document.getElementById('turnRow').classList.toggle('black-turn', !isWhite && !game.game_over());
+  document.getElementById('chipWhite').classList.toggle('active', isWhite && !game.game_over());
+  document.getElementById('chipBlack').classList.toggle('active', !isWhite && !game.game_over());
+}
+
+function updatePgn(){
+  document.getElementById('pgnArea').value = buildCleanPgn();
+}
+
+function buildCleanPgn(){
+  const hist = game.history();
+  let out = '';
+  for (let i = 0; i < hist.length; i++){
+    if (i % 2 === 0) out += (i/2 + 1) + '. ';
+    out += hist[i] + ' ';
+  }
+  return out.trim();
+}
+
+function gameOverMessage(){
+  if (game.in_checkmate()) return 'Checkmate · ' + (game.turn() === 'w' ? 'Black wins' : 'White wins');
+  if (game.in_stalemate()) return 'Stalemate · Draw';
+  if (game.in_draw()) return 'Draw';
+  return 'Game over';
+}
+
+/* ═══════════ MOVE INPUT ═══════════ */
+document.getElementById('moveInput').addEventListener('keydown', (e)=>{
+  if (e.key !== 'Enter') return;
+  const input = e.target;
+  const san = input.value.trim();
+  if (!san) return;
+  playSanMove(san);
+  input.value = '';
+});
+
+function playSanMove(san){
+  try{
+    const move = game.move(san);
+    if (!move){ showToast('Illegal move: ' + san, 'err'); return; }
+    lastMove = {from: move.from, to: move.to};
+    selectedSquare = null;
+    board.position(game.fen());
+    refreshHighlights();
+    updateTurnUI();
+    updatePgn();
+    if (game.game_over()) showToast(gameOverMessage(), 'ok');
+  }catch(err){
+    showToast('Invalid move: ' + san, 'err');
+  }
+}
+
+/* ═══════════ BUTTONS ═══════════ */
+document.getElementById('newBtn').addEventListener('click', ()=>{
+  game.reset();
+  selectedSquare = null;
+  lastMove = {from:null, to:null};
+  board.position('start');
+  document.getElementById('pgnArea').value = '';
+  updateTurnUI();
+  refreshHighlights();
+  showToast('New game started', 'ok');
+});
+
+document.getElementById('undoBtn').addEventListener('click', ()=>{
+  const undone = game.undo();
+  if (!undone){ showToast('Nothing to undo', 'err'); return; }
+  selectedSquare = null;
+  const h = game.history({verbose:true});
+  lastMove = h.length > 0
+    ? {from: h[h.length-1].from, to: h[h.length-1].to}
+    : {from: null, to: null};
+  board.position(game.fen());
+  refreshHighlights();
+  updateTurnUI();
+  updatePgn();
+});
+
+document.getElementById('flipBtn').addEventListener('click', ()=>{ board.flip(); });
+
+document.getElementById('copyBtn').addEventListener('click', ()=>{
+  const pgn = buildCleanPgn();
+  if (!pgn){ showToast('No moves to copy', 'err'); return; }
+  navigator.clipboard.writeText(pgn).then(()=>{
+    showToast('PGN copied to clipboard', 'ok');
+  }).catch(()=>{
+    const ta = document.getElementById('pgnArea');
+    ta.value = pgn; ta.select();
+    document.execCommand('copy');
+    showToast('PGN copied', 'ok');
+  });
+});
+
+document.getElementById('loadBtn').addEventListener('click', ()=>{
+  const pgn = document.getElementById('pgnArea').value.trim();
+  if (!pgn){ showToast('Paste a PGN first', 'err'); return; }
+  loadPgn(pgn);
+});
+
+function loadPgn(pgn){
+  const test = new Chess();
+  try{ test.load_pgn(pgn); }
+  catch(e){ showToast('Invalid PGN', 'err'); return; }
+
+  game.reset();
+  game.load_pgn(pgn);
+  board.position(game.fen());
+
+  const hist = game.history({verbose:true});
+  lastMove = hist.length > 0
+    ? {from: hist[hist.length-1].from, to: hist[hist.length-1].to}
+    : {from: null, to: null};
+  selectedSquare = null;
+  refreshHighlights();
+  updateTurnUI();
+  updatePgn();
+  showToast('PGN loaded · ' + hist.length + ' moves', 'ok');
+}
+
+/* ═══════════ TOAST ═══════════ */
+let toastTimer = null;
+function showToast(msg, type){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + (type || '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.classList.remove('show'), 2400);
+}
+
+/* ═══════════ BOOT ═══════════ */
+window.addEventListener('DOMContentLoaded', ()=>{
+  initBoard();
+  updateTurnUI();
+});
 </script>
 </body>
 </html>
