@@ -91,11 +91,11 @@ body{
 
 /* Board */
 .board-wrap{padding:16px;background:var(--surface);display:flex;justify-content:center}
-#board{width:100%;max-width:560px;border-radius:10px;overflow:hidden;box-shadow:0 6px 26px rgba(0,0,0,.45)}
+#board{width:100%;max-width:560px;border-radius:10px;overflow:hidden;box-shadow:0 6px 26px rgba(0,0,0,.45);position:relative}
 #board .white-1e1d7{background-color:#ebecd0 !important}
 #board .black-1e1d7{background-color:#779556 !important}
 
-/* ─── Board Interaction Highlights ─── */
+/* Board highlights */
 #board .square-55d63{position:relative}
 #board .square-55d63.last-move{background-color:rgba(255,215,80,.42) !important}
 #board .square-55d63.selected-square{background-color:rgba(255,235,100,.68) !important;
@@ -104,7 +104,7 @@ body{
   transform:translate(-50%,-50%);background:rgba(20,20,20,.32);border-radius:50%;pointer-events:none;z-index:10}
 #board .legal-capture::after{content:'';position:absolute;top:2%;left:2%;width:96%;height:96%;
   border-radius:50%;border:4px solid rgba(230,60,60,.72);box-sizing:border-box;pointer-events:none;z-index:10}
-#board .legal-move:hover::after{background:rgba(20,20,20,.45)}
+#board .legal-move:hover::after{background:rgba(20,20,20,.5)}
 #board .legal-capture:hover::after{border-color:rgba(230,60,60,.95)}
 
 /* Move Input */
@@ -320,9 +320,6 @@ let selectedSquare = null;
 let lastMove = {from: null, to: null};
 let _historyBeforeSnapshot = null;
 
-/* ═══════════════════════════════════════════════════════════
-   CONSTANTS
-   ═══════════════════════════════════════════════════════════ */
 const PIECE_VALUES = {p:1,n:3,b:3,r:5,q:9,k:0};
 const DEPTH = 14;
 
@@ -337,20 +334,20 @@ const BOOK_MOVES = new Set([
 ]);
 
 const CLASS_META = {
-  brilliant:   {label:'!!', title:'Brilliant'},
-  great:       {label:'!',  title:'Great'},
-  best:        {label:'★',  title:'Best'},
-  excellent:   {label:'✓',  title:'Excellent'},
-  good:        {label:'✓',  title:'Good'},
-  book:        {label:'📖', title:'Book'},
-  inaccuracy:  {label:'?!', title:'Inaccuracy'},
-  mistake:     {label:'?',  title:'Mistake'},
-  blunder:     {label:'??', title:'Blunder'},
-  unknown:     {label:'·',  title:'Unclassified'}
+  brilliant:{label:'!!',title:'Brilliant'},
+  great:{label:'!',title:'Great'},
+  best:{label:'★',title:'Best'},
+  excellent:{label:'✓',title:'Excellent'},
+  good:{label:'✓',title:'Good'},
+  book:{label:'📖',title:'Book'},
+  inaccuracy:{label:'?!',title:'Inaccuracy'},
+  mistake:{label:'?',title:'Mistake'},
+  blunder:{label:'??',title:'Blunder'},
+  unknown:{label:'·',title:'Unclassified'}
 };
 
 /* ═══════════════════════════════════════════════════════════
-   ENGINE — multi-source fallback + WASM
+   ENGINE
    ═══════════════════════════════════════════════════════════ */
 const ENGINE_SOURCES = [
   'https://cdn.jsdelivr.net/npm/stockfish@16.0.0/src/stockfish-nnue-16-single.js',
@@ -376,12 +373,11 @@ function initEngine(){ trySource(0); }
 function trySource(index){
   if (index >= ENGINE_SOURCES.length){
     setEngineStatus('error', 'Engine failed to load');
-    showToast('Stockfish could not load. Check console.', 'err');
     return;
   }
   if (engine){ try{ engine.terminate(); }catch(e){} engine = null; }
   engineReady = false;
-  setEngineStatus('loading', `Loading engine (${index+1}/${ENGINE_SOURCES.length})…`);
+  setEngineStatus('loading', 'Loading engine (' + (index+1) + '/' + ENGINE_SOURCES.length + ')…');
 
   let worker;
   try { worker = new Worker(ENGINE_SOURCES[index]); }
@@ -398,7 +394,7 @@ function trySource(index){
   }, 9000);
 
   worker.onerror = (err)=>{
-    console.warn('[engine] worker error on source', index, err);
+    console.warn('[engine] worker error', index, err);
     if (!settled){
       settled = true;
       clearTimeout(timeout);
@@ -411,14 +407,13 @@ function trySource(index){
     const msg = e.data;
     if (typeof msg !== 'string') return;
 
-    /* info line: capture score / depth / pv */
     if (msg.startsWith('info') && msg.includes(' score ')){
       const sm = msg.match(/score (cp|mate) (-?\d+)/);
       if (sm){
         if (sm[1] === 'mate'){
           currentLastMate = parseInt(sm[2], 10);
           currentLastScore = currentLastMate > 0
-            ?  100000 - Math.abs(currentLastMate) * 100
+            ? 100000 - Math.abs(currentLastMate) * 100
             : -100000 + Math.abs(currentLastMate) * 100;
         } else {
           currentLastMate = null;
@@ -430,7 +425,6 @@ function trySource(index){
       return;
     }
 
-    /* bestmove */
     if (msg.startsWith('bestmove')){
       const parts = msg.split(/\s+/);
       currentLastBest = parts[1] || null;
@@ -438,7 +432,6 @@ function trySource(index){
       return;
     }
 
-    /* handshake */
     if (msg === 'uciok'){
       worker.postMessage('setoption name Hash value 32');
       worker.postMessage('setoption name Threads value 1');
@@ -452,7 +445,6 @@ function trySource(index){
       engine = worker;
       engineReady = true;
       setEngineStatus('ready', 'Stockfish ready');
-      // Initial position analysis
       queueAnalysis(game.fen(), DEPTH).then(r=>{
         currentEval = r ? {
           cp: whitePerspective(r, game.turn()).cp,
@@ -468,7 +460,6 @@ function trySource(index){
   worker.postMessage('uci');
 }
 
-/* ─── Analysis queue ─── */
 function queueAnalysis(fen, depth){
   if (!engineReady) return Promise.resolve(null);
   return new Promise(resolve=>{
@@ -533,14 +524,11 @@ function evalToPercent(cp){
 }
 
 /* ═══════════════════════════════════════════════════════════
-   MOVE CLASSIFICATION
+   CLASSIFICATION
    ═══════════════════════════════════════════════════════════ */
 function classifyMove(moveObj, evalBefore, evalAfter, gameAfter, plyIndex){
   const moverIsWhite = moveObj.color === 'w';
-
-  if (plyIndex <= 11 && isBookMove(moveObj)){
-    return {classification:'book', cpLoss:0};
-  }
+  if (plyIndex <= 11 && isBookMove(moveObj)) return {classification:'book', cpLoss:0};
 
   const beforeForMover = moverIsWhite ? evalBefore.cp : -evalBefore.cp;
   const afterForMover  = moverIsWhite ? evalAfter.cp  : -evalAfter.cp;
@@ -549,9 +537,7 @@ function classifyMove(moveObj, evalBefore, evalAfter, gameAfter, plyIndex){
   if (evalBefore.mateIn !== null && evalAfter.mateIn !== null){
     const beforeM = moverIsWhite ? evalBefore.mateIn : -evalBefore.mateIn;
     const afterM  = moverIsWhite ? evalAfter.mateIn  : -evalAfter.mateIn;
-    if (beforeM > 0 && afterM > 0){
-      cpLoss = Math.max(0, (afterM - beforeM) * 100);
-    }
+    if (beforeM > 0 && afterM > 0) cpLoss = Math.max(0, (afterM - beforeM) * 100);
   }
 
   const isBest = evalBefore.bestMove &&
@@ -561,17 +547,11 @@ function classifyMove(moveObj, evalBefore, evalAfter, gameAfter, plyIndex){
       (moverIsWhite ? evalAfter.cp : -evalAfter.cp) > 30){
     return {classification:'brilliant', cpLoss};
   }
-
   if (isBest && cpLoss < 20){
     const swing = Math.abs(evalBefore.cp - evalAfter.cp);
-    if (swing > 250 && evalAfter.mateIn === null){
-      return {classification:'great', cpLoss};
-    }
-    if (evalAfter.mateIn !== null && Math.abs(evalAfter.mateIn) <= 6){
-      return {classification:'great', cpLoss};
-    }
+    if (swing > 250 && evalAfter.mateIn === null) return {classification:'great', cpLoss};
+    if (evalAfter.mateIn !== null && Math.abs(evalAfter.mateIn) <= 6) return {classification:'great', cpLoss};
   }
-
   if (isBest) return {classification:'best', cpLoss};
   if (cpLoss < 20)  return {classification:'excellent', cpLoss};
   if (cpLoss < 55)  return {classification:'good', cpLoss};
@@ -627,7 +607,6 @@ function initBoard(){
   window.addEventListener('resize', ()=>board.resize());
 }
 
-/* ─── Drag flow ─── */
 function onDragStart(source, piece){
   if (game.game_over()) return false;
   if (game.turn() === 'w' && piece[0] === 'b') return false;
@@ -658,11 +637,10 @@ function onDrop(source, target){
 
 function onSnapEnd(){ board.position(game.fen()); }
 
-/* ─── Click / tap flow ─── */
 function onSquareClick(square, piece){
   if (game.game_over()) return;
 
-  // 1) If a piece is selected and clicked square is a legal destination → move
+  // 1) Move if destination is legal
   if (selectedSquare){
     const moves = game.moves({square: selectedSquare, verbose: true});
     const legal = moves.find(m => m.to === square);
@@ -679,55 +657,49 @@ function onSquareClick(square, piece){
     }
   }
 
-  // 2) Clicked own piece → select (or deselect if same square)
+  // 2) Select own piece
   if (piece && piece[0] === game.turn()){
     if (selectedSquare === square){
       selectedSquare = null;
-      refreshHighlights();
     } else {
       selectedSquare = square;
-      refreshHighlights();
     }
+    refreshHighlights();
     return;
   }
 
-  // 3) Clicked empty / illegal → clear selection
+  // 3) Clear selection
   if (selectedSquare){
     selectedSquare = null;
     refreshHighlights();
   }
 }
 
-/* ─── Highlighting ─── */
 function refreshHighlights(){
-  // wipe
   $('#board .square-55d63').removeClass('selected-square legal-move legal-capture last-move');
 
-  // last move tint
   if (lastMove.from && lastMove.to){
     $('#board .square-' + lastMove.from).addClass('last-move');
     $('#board .square-' + lastMove.to).addClass('last-move');
   }
 
-  // selection + legal destinations
   if (selectedSquare){
     $('#board .square-' + selectedSquare).addClass('selected-square');
     const moves = game.moves({square: selectedSquare, verbose: true});
     for (const m of moves){
-      const cls = (m.captured || m.flags.includes('e')) ? 'legal-capture' : 'legal-move';
+      const cls = (m.captured || m.flags.indexOf('e') >= 0) ? 'legal-capture' : 'legal-move';
       $('#board .square-' + m.to).addClass(cls);
     }
   }
 }
 
 /* ═══════════════════════════════════════════════════════════
-   MOVE HANDLING & ANALYSIS
+   MOVE HANDLING
    ═══════════════════════════════════════════════════════════ */
 async function onMoveMade(moveResult){
   const plyIndex = moveHistory.length;
   const evalBeforeSnapshot = currentEval;
 
-  // Snapshot position BEFORE this move for SAN conversion
   const clone = new Chess();
   const hist = game.history({verbose:true});
   for (let i = 0; i < hist.length - 1; i++) clone.move(hist[i]);
@@ -790,12 +762,11 @@ function gameOverMessage(){
 }
 
 /* ═══════════════════════════════════════════════════════════
-   UI UPDATES
+   UI
    ═══════════════════════════════════════════════════════════ */
 function updateTurnUI(){
   const isWhite = game.turn() === 'w';
-  const txt = document.getElementById('turnText');
-  txt.textContent = game.game_over()
+  document.getElementById('turnText').textContent = game.game_over()
     ? 'Game over'
     : (isWhite ? 'White to move' : 'Black to move');
   document.getElementById('turnRow').classList.toggle('black-turn', !isWhite && !game.game_over());
@@ -857,9 +828,8 @@ function renderMoveList(){
   for (let i = 0; i < moveHistory.length; i += 2){
     const w = moveHistory[i];
     const b = moveHistory[i+1];
-    const num = (i/2) + 1;
     html += '<div class="move-row">';
-    html += '<div class="move-num">' + num + '.</div>';
+    html += '<div class="move-num">' + ((i/2) + 1) + '.</div>';
     html += renderMoveCell(w, false);
     html += b ? renderMoveCell(b, true) : '<div class="move-cell"></div>';
     html += '</div>';
@@ -920,4 +890,166 @@ document.getElementById('moveInput').addEventListener('keydown', (e)=>{
   if (e.key !== 'Enter') return;
   const input = e.target;
   const san = input.value.trim();
-  if (!san)
+  if (!san) return;
+  playSanMove(san);
+  input.value = '';
+});
+
+function playSanMove(san){
+  try{
+    const move = game.move(san);
+    if (!move){ showToast('Illegal move: ' + san, 'err'); return; }
+    lastMove = {from: move.from, to: move.to};
+    selectedSquare = null;
+    board.position(game.fen());
+    refreshHighlights();
+    onMoveMade(move);
+  }catch(err){
+    showToast('Invalid move: ' + san, 'err');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BUTTONS
+   ═══════════════════════════════════════════════════════════ */
+document.getElementById('newBtn').addEventListener('click', ()=>{
+  game.reset();
+  moveHistory = [];
+  currentEval = null;
+  selectedSquare = null;
+  lastMove = {from:null, to:null};
+  board.position('start');
+  document.getElementById('moveList').innerHTML = '<div class="empty-moves">No moves yet.<br>Play the first move to begin analysis.</div>';
+  document.getElementById('moveCountHint').textContent = '0 moves';
+  document.getElementById('pgnArea').value = '';
+  document.getElementById('accW').textContent = '—';
+  document.getElementById('accB').textContent = '—';
+  document.getElementById('accWhite').classList.remove('show');
+  document.getElementById('accBlack').classList.remove('show');
+  updateEvalUI();
+  updateTurnUI();
+  refreshHighlights();
+  queueAnalysis(game.fen(), DEPTH).then(r=>{
+    currentEval = r ? {
+      cp: whitePerspective(r, game.turn()).cp,
+      mateIn: whitePerspective(r, game.turn()).mateIn,
+      bestMove: r.bestMove,
+      fen: game.fen()
+    } : null;
+    updateEvalUI();
+  });
+  showToast('New game started', 'ok');
+});
+
+document.getElementById('undoBtn').addEventListener('click', ()=>{
+  const undone = game.undo();
+  if (!undone){ showToast('Nothing to undo', 'err'); return; }
+  moveHistory.pop();
+  selectedSquare = null;
+  const h = game.history({verbose:true});
+  if (h.length > 0){
+    lastMove = {from: h[h.length-1].from, to: h[h.length-1].to};
+  } else {
+    lastMove = {from:null, to:null};
+  }
+  board.position(game.fen());
+  refreshHighlights();
+  renderMoveList();
+  updatePgn();
+  updateAccuracy();
+  updateTurnUI();
+  queueAnalysis(game.fen(), DEPTH).then(r=>{
+    currentEval = r ? {
+      cp: whitePerspective(r, game.turn()).cp,
+      mateIn: whitePerspective(r, game.turn()).mateIn,
+      bestMove: r.bestMove,
+      fen: game.fen()
+    } : null;
+    updateEvalUI();
+  });
+});
+
+document.getElementById('flipBtn').addEventListener('click', ()=>{ board.flip(); });
+
+document.getElementById('copyBtn').addEventListener('click', ()=>{
+  const pgn = buildCleanPgn();
+  if (!pgn){ showToast('No moves to copy', 'err'); return; }
+  navigator.clipboard.writeText(pgn).then(()=>{
+    showToast('PGN copied to clipboard', 'ok');
+  }).catch(()=>{
+    const ta = document.getElementById('pgnArea');
+    ta.value = pgn; ta.select();
+    document.execCommand('copy');
+    showToast('PGN copied', 'ok');
+  });
+});
+
+document.getElementById('loadBtn').addEventListener('click', ()=>{
+  const pgn = document.getElementById('pgnArea').value.trim();
+  if (!pgn){ showToast('Paste a PGN first', 'err'); return; }
+  loadPgn(pgn);
+});
+
+async function loadPgn(pgn){
+  const test = new Chess();
+  try{ test.load_pgn(pgn); }
+  catch(e){ showToast('Invalid PGN', 'err'); return; }
+
+  game.reset();
+  game.load_pgn(pgn);
+  board.position(game.fen());
+
+  const hist = game.history({verbose:true});
+  moveHistory = hist.map(m => ({
+    san:m.san, from:m.from, to:m.to, color:m.color,
+    classification:'unknown', cpLoss:0, evalBefore:0, evalAfter:0
+  }));
+
+  if (hist.length > 0){
+    lastMove = {from: hist[hist.length-1].from, to: hist[hist.length-1].to};
+  } else {
+    lastMove = {from:null, to:null};
+  }
+  selectedSquare = null;
+  refreshHighlights();
+
+  renderMoveList();
+  updatePgn();
+  updateTurnUI();
+  updateAccuracy();
+
+  const r = await queueAnalysis(game.fen(), DEPTH);
+  currentEval = r ? {
+    cp: whitePerspective(r, game.turn()).cp,
+    mateIn: whitePerspective(r, game.turn()).mateIn,
+    bestMove: r.bestMove,
+    fen: game.fen()
+  } : null;
+  updateEvalUI();
+  showToast('PGN loaded · ' + hist.length + ' moves', 'ok');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════════════════════════ */
+let toastTimer = null;
+function showToast(msg, type){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + (type || '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ el.classList.remove('show'); }, 2400);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BOOT
+   ═══════════════════════════════════════════════════════════ */
+window.addEventListener('DOMContentLoaded', ()=>{
+  initBoard();
+  initEngine();
+  updateTurnUI();
+  updateEvalUI();
+});
+</script>
+</body>
+</html>
